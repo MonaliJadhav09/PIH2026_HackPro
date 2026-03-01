@@ -5,82 +5,153 @@ require("dotenv").config();
 
 const app = express();
 
-// Import User Model
 const User = require("./models/userModel");
 const Health = require("./models/healthModel");
-// Middleware
+const Appointment = require("./models/appointmentModel");
+
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Connection
-mongoose.connect("mongodb+srv://aaicareuser:Aaicare0911@cluster0.lbxsftx.mongodb.net/aaicare?appName=Cluster0")
+mongoose.connect("mongodb+srv://aaicareuser:Aaicare0911@cluster0.lbxsftx.mongodb.net/aaicare")
   .then(() => console.log("MongoDB Connected Successfully"))
-  .catch((err) => console.log(err));
+  .catch(err => console.log(err));
 
-// Test Route
+/* ---------------- ROOT ---------------- */
 app.get("/", (req, res) => {
-  res.send("AaiCare Backend Running Successfully 🚀");
+  res.send("AaiCare Backend Running 🚀");
 });
 
-// Register User API
+/* ---------------- REGISTER ---------------- */
 app.post("/register", async (req, res) => {
   try {
     const newUser = new User(req.body);
     await newUser.save();
-    res.status(201).json({
-      message: "User Registered Successfully",
-      user: newUser
-    });
+    res.status(201).json(newUser);
   } catch (error) {
-    res.status(500).json({ error: "Something went wrong" });
+    res.status(500).json({ message: "Registration failed" });
   }
 });
 
-// Add Health Data API
+/* ---------------- LOGIN ---------------- */
+app.post("/login", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({
+      email: { $regex: new RegExp("^" + email + "$", "i") }
+    });
+
+    if (!user) return res.status(400).json({ message: "User not found" });
+
+    res.json({ user });
+  } catch (error) {
+    res.status(500).json({ message: "Login failed" });
+  }
+});
+
+/* ---------------- ADD HEALTH ---------------- */
 app.post("/add-health", async (req, res) => {
   try {
-    const healthData = new Health(req.body);
-    await healthData.save();
-    res.status(201).json({
-      message: "Health Data Added Successfully",
-      healthData
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Something went wrong" });
-  }
-});
-
-// 🟢 Healthy Baby Score API
-app.get("/score/:userId", async (req, res) => {
-  try {
-    const health = await Health.findOne({ userId: req.params.userId });
-
-    if (!health) {
-      return res.status(404).json({ message: "Health data not found" });
-    }
+    const { bp, sugar, hemoglobin, weight, exercise, userId } = req.body;
 
     let score = 0;
 
-    if (health.bp < 140) score += 20;
-    if (health.sugar < 140) score += 20;
-    if (health.hemoglobin >= 11) score += 20;
-    if (health.exercise) score += 20;
-    if (health.weight >= 45) score += 20;
+    if (bp < 140) score += 20;
+    if (sugar < 140) score += 20;
+    if (hemoglobin >= 11) score += 20;
+    if (exercise) score += 20;
+    if (weight >= 45) score += 20;
 
-    let status = "";
-    if (score >= 80) status = "Excellent";
-    else if (score >= 60) status = "Moderate";
-    else status = "High Risk";
+    let status =
+      score >= 80 ? "Excellent" :
+      score >= 60 ? "Moderate" :
+      "High Risk";
 
-    res.json({ score, status });
+    const health = new Health({
+      userId,
+      bp,
+      sugar,
+      hemoglobin,
+      weight,
+      exercise,
+      score,
+      status,
+      date: new Date()
+    });
+
+    await health.save();
+
+    res.status(201).json({
+      message: "Health data saved",
+      health
+    });
 
   } catch (error) {
-    res.status(500).json({ error: "Something went wrong" });
+    res.status(500).json({ message: "Health save failed" });
   }
 });
 
-// Start Server
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+/* ---------------- GET HEALTH HISTORY ---------------- */
+app.get("/health-history/:userId", async (req, res) => {
+  try {
+    const data = await Health.find({ userId: req.params.userId })
+      .sort({ date: 1 });
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: "Fetch failed" });
+  }
+});
+
+/* ---------------- GET LATEST SCORE ---------------- */
+app.get("/score/:userId", async (req, res) => {
+  try {
+    const latest = await Health.findOne({ userId: req.params.userId })
+      .sort({ date: -1 });
+
+    if (!latest)
+      return res.status(404).json({ message: "No health data found" });
+
+    res.json({
+      score: latest.score,
+      status: latest.status
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: "Score fetch failed" });
+  }
+});
+
+/* ---------------- ADD APPOINTMENT ---------------- */
+app.post("/add-appointment", async (req, res) => {
+  try {
+    const appointment = new Appointment({
+      userId: req.body.userId,
+      date: req.body.date
+    });
+
+    await appointment.save();
+    res.status(201).json(appointment);
+
+  } catch (error) {
+    res.status(500).json({ message: "Appointment save failed" });
+  }
+});
+
+/* ---------------- GET APPOINTMENT ---------------- */
+app.get("/appointment/:userId", async (req, res) => {
+  try {
+    const appointment = await Appointment.findOne({
+      userId: req.params.userId
+    }).sort({ date: -1 });
+
+    res.json(appointment);
+
+  } catch (error) {
+    res.status(500).json({ message: "Appointment fetch failed" });
+  }
+});
+
+/* ---------------- SERVER START ---------------- */
+app.listen(5000, () => {
+  console.log("Server running on port 5000");
 });
