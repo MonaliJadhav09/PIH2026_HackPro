@@ -9,12 +9,17 @@ const User = require("./models/userModel");
 const Health = require("./models/healthModel");
 const Appointment = require("./models/appointmentModel");
 
-app.use(cors());
+/* ---------------- MIDDLEWARE ---------------- */
+app.use(cors({
+  origin: "*"
+}));
+
 app.use(express.json());
 
-mongoose.connect("mongodb+srv://aaicareuser:Aaicare0911@cluster0.lbxsftx.mongodb.net/aaicare")
+/* ---------------- MONGODB CONNECTION ---------------- */
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected Successfully"))
-  .catch(err => console.log(err));
+  .catch(err => console.log("MongoDB Error:", err));
 
 /* ---------------- ROOT ---------------- */
 app.get("/", (req, res) => {
@@ -41,9 +46,12 @@ app.post("/login", async (req, res) => {
       email: { $regex: new RegExp("^" + email + "$", "i") }
     });
 
-    if (!user) return res.status(400).json({ message: "User not found" });
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
 
     res.json({ user });
+
   } catch (error) {
     res.status(500).json({ message: "Login failed" });
   }
@@ -96,6 +104,7 @@ app.get("/health-history/:userId", async (req, res) => {
   try {
     const data = await Health.find({ userId: req.params.userId })
       .sort({ date: 1 });
+
     res.json(data);
   } catch (error) {
     res.status(500).json({ message: "Fetch failed" });
@@ -108,8 +117,9 @@ app.get("/score/:userId", async (req, res) => {
     const latest = await Health.findOne({ userId: req.params.userId })
       .sort({ date: -1 });
 
-    if (!latest)
+    if (!latest) {
       return res.status(404).json({ message: "No health data found" });
+    }
 
     res.json({
       score: latest.score,
@@ -152,6 +162,8 @@ app.get("/appointment/:userId", async (req, res) => {
 });
 
 /* ---------------- SERVER START ---------------- */
-app.listen(5000, () => {
-  console.log("Server running on port 5000");
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
